@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     libonig-dev \
     libxml2-dev \
     libicu-dev \
+    libgmp-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
         pdo_mysql \
@@ -23,6 +24,7 @@ RUN apt-get update && apt-get install -y \
         zip \
         intl \
         xml \
+        gmp \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install Composer
