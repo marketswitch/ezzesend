@@ -1,0 +1,1 @@
+ALTER TABLE `pricing_plans` CHANGE `ecommerce_config` `ecommerce_available` TINYINT(1) NOT NULL DEFAULT '0' COMMENT '0 = off, 1 = on';
