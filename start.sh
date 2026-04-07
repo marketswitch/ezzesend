@@ -1,10 +1,27 @@
 #!/bin/bash
 echo "=== EzzeSend Starting ==="
 
-# Hardcode DB connection directly - bypasses Railway variable injection issues
-# Using Railway's private networking: servicename.railway.internal
+# Try private networking first, fall back to checking if it resolves
+MYSQL_HOST="mysql.railway.internal"
+MYSQL_PORT="3306"
 
-cat > .env << 'ENVEOF'
+# Test DNS resolution
+php -r "
+\$host = 'mysql.railway.internal';
+\$ip = gethostbyname(\$host);
+echo 'DNS lookup: ' . \$host . ' -> ' . \$ip . PHP_EOL;
+if (\$ip === \$host) {
+    echo 'DNS FAILED - trying TCP proxy' . PHP_EOL;
+    exit(1);
+} else {
+    echo 'DNS OK' . PHP_EOL;
+    exit(0);
+}
+" || MYSQL_HOST="${MYSQLHOST:-mysql.railway.internal}"
+
+echo "Using DB_HOST: $MYSQL_HOST"
+
+cat > .env << ENVEOF
 APP_NAME=EzzeSend
 APP_ENV=production
 APP_KEY=base64:X3pLm8vQpR2wNjY4tBdCgUaEiHsSoF6nDeKuMxIcAo=
@@ -15,8 +32,8 @@ LOG_CHANNEL=stack
 LOG_LEVEL=debug
 
 DB_CONNECTION=mysql
-DB_HOST=mysql.railway.internal
-DB_PORT=3306
+DB_HOST=${MYSQL_HOST}
+DB_PORT=${MYSQL_PORT}
 DB_DATABASE=railway
 DB_USERNAME=root
 DB_PASSWORD=dRHjLZTHTJBuvgyhRfFLYaFiOjYAttzy
@@ -27,29 +44,28 @@ QUEUE_CONNECTION=sync
 BROADCAST_DRIVER=log
 FILESYSTEM_DISK=local
 
-BROADCAST_DRIVER=pusher
 PUSHER_APP_ID=
 PUSHER_APP_KEY=
 PUSHER_APP_SECRET=
 PUSHER_APP_CLUSTER=mt1
 ENVEOF
 
-echo "DB_HOST=$(grep DB_HOST .env)"
+echo "DB_HOST in .env: $(grep ^DB_HOST .env)"
 
-# Wait for MySQL to be ready (up to 30 seconds)
-echo "Waiting for MySQL..."
+# Wait for MySQL
+echo "Waiting for MySQL to be ready..."
 for i in $(seq 1 30); do
     php -r "
-    try {
-        \$pdo = new PDO('mysql:host=mysql.railway.internal;port=3306;dbname=railway', 'root', 'dRHjLZTHTJBuvgyhRfFLYaFiOjYAttzy');
-        echo 'MySQL connected!' . PHP_EOL;
-        exit(0);
-    } catch(Exception \$e) {
-        echo 'Waiting... ' . \$e->getMessage() . PHP_EOL;
-        exit(1);
-    }
-    " && break
-    sleep 1
+    \$pdo = new PDO(
+        'mysql:host=${MYSQL_HOST};port=${MYSQL_PORT};dbname=railway',
+        'root',
+        'dRHjLZTHTJBuvgyhRfFLYaFiOjYAttzy',
+        [PDO::ATTR_TIMEOUT => 3]
+    );
+    echo 'MySQL connected OK' . PHP_EOL;
+    " 2>/dev/null && { echo "MySQL ready!"; break; }
+    echo "Attempt $i - waiting..."
+    sleep 2
 done
 
 php artisan config:clear 2>/dev/null || true
