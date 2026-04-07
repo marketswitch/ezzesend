@@ -1,25 +1,40 @@
 #!/bin/bash
 echo "=== EzzeSend Starting ==="
-echo "PORT: $PORT | APP_ENV: $APP_ENV | DB_HOST: $DB_HOST"
+echo "=== ALL ENVIRONMENT VARIABLES ==="
+env | grep -i "mysql\|db_\|database\|railway\|port\|host" | sort
+echo "=== END ENV ==="
 
-# Write Railway environment variables into .env file
-# This is needed because Laravel prioritizes .env over OS env vars
+# Try to get DB values from multiple possible Railway variable names
+DB_HOST_RESOLVED="${DB_HOST:-${MYSQLHOST:-${RAILWAY_PRIVATE_DOMAIN:-mysql.railway.internal}}}"
+DB_PORT_RESOLVED="${DB_PORT:-${MYSQLPORT:-3306}}"
+DB_NAME_RESOLVED="${DB_DATABASE:-${MYSQLDATABASE:-${MYSQL_DATABASE:-railway}}}"
+DB_USER_RESOLVED="${DB_USERNAME:-${MYSQLUSER:-root}}"
+DB_PASS_RESOLVED="${DB_PASSWORD:-${MYSQLPASSWORD:-${MYSQL_ROOT_PASSWORD}}}"
+
+echo "=== RESOLVED DB VALUES ==="
+echo "HOST: $DB_HOST_RESOLVED"
+echo "PORT: $DB_PORT_RESOLVED"
+echo "NAME: $DB_NAME_RESOLVED"
+echo "USER: $DB_USER_RESOLVED"
+echo "PASS: [hidden]"
+
+# Write .env with resolved values
 cat > .env << ENVFILE
 APP_NAME=${APP_NAME:-EzzeSend}
 APP_ENV=${APP_ENV:-production}
-APP_KEY=${APP_KEY}
-APP_DEBUG=${APP_DEBUG:-false}
-APP_URL=${APP_URL:-http://localhost}
+APP_KEY=${APP_KEY:-base64:X3pLm8vQpR2wNjY4tBdCgUaEiHsSoF6nDeKuMxIcAo=}
+APP_DEBUG=${APP_DEBUG:-true}
+APP_URL=${APP_URL:-https://ezzesend-production.up.railway.app}
 
 LOG_CHANNEL=stack
-LOG_LEVEL=${LOG_LEVEL:-error}
+LOG_LEVEL=debug
 
 DB_CONNECTION=mysql
-DB_HOST=${DB_HOST}
-DB_PORT=${DB_PORT:-3306}
-DB_DATABASE=${DB_DATABASE}
-DB_USERNAME=${DB_USERNAME}
-DB_PASSWORD=${DB_PASSWORD}
+DB_HOST=${DB_HOST_RESOLVED}
+DB_PORT=${DB_PORT_RESOLVED}
+DB_DATABASE=${DB_NAME_RESOLVED}
+DB_USERNAME=${DB_USER_RESOLVED}
+DB_PASSWORD=${DB_PASS_RESOLVED}
 
 CACHE_DRIVER=file
 SESSION_DRIVER=file
@@ -31,22 +46,17 @@ PUSHER_APP_ID=${PUSHER_APP_ID}
 PUSHER_APP_KEY=${PUSHER_APP_KEY}
 PUSHER_APP_SECRET=${PUSHER_APP_SECRET}
 PUSHER_APP_CLUSTER=${PUSHER_APP_CLUSTER:-mt1}
-
-SHOPIFY_CLIENT_ID=${SHOPIFY_CLIENT_ID}
-SHOPIFY_REDIRECT_URI=${SHOPIFY_REDIRECT_URI}
 ENVFILE
 
-echo "DB_HOST in .env: $(grep DB_HOST .env)"
+echo "=== .env DB_HOST line ==="
+grep DB_HOST .env
 
-# Clear config cache and rebuild from new .env
 php artisan config:clear 2>/dev/null || true
 php artisan cache:clear 2>/dev/null || true
 
-# Run migrations
 echo "Running migrations..."
 php artisan migrate --force --no-interaction 2>&1 || echo "Migration warning — continuing"
 
-# Cache
 php artisan config:cache 2>/dev/null || true
 php artisan route:cache 2>/dev/null || true
 
