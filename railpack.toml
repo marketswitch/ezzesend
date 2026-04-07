@@ -1,2 +1,16 @@
 [build]
-cmds = ["mkdir -p bootstrap/cache"]
+cmds = [
+  "mkdir -p bootstrap/cache",
+  "mkdir -p storage/framework/cache/data",
+  "mkdir -p storage/framework/sessions",
+  "mkdir -p storage/framework/views",
+  "mkdir -p storage/logs",
+  "chmod -R 775 storage bootstrap/cache",
+  "cp .env .env.backup || true",
+  "php artisan key:generate --force"
+]
+
+[deploy]
+startCommand = "bash start.sh"
+healthcheckPath = "/up"
+healthcheckTimeout = 180
