@@ -1,25 +1,23 @@
 #!/bin/bash
 echo "=== EzzeSend Starting ==="
 
-# Try private networking first, fall back to checking if it resolves
-MYSQL_HOST="mysql.railway.internal"
-MYSQL_PORT="3306"
+# Test DNS for mysql.railway.internal
+DNS_RESULT=$(php -r "echo gethostbyname('mysql.railway.internal');" 2>/dev/null)
+echo "DNS mysql.railway.internal = $DNS_RESULT"
 
-# Test DNS resolution
-php -r "
-\$host = 'mysql.railway.internal';
-\$ip = gethostbyname(\$host);
-echo 'DNS lookup: ' . \$host . ' -> ' . \$ip . PHP_EOL;
-if (\$ip === \$host) {
-    echo 'DNS FAILED - trying TCP proxy' . PHP_EOL;
-    exit(1);
-} else {
-    echo 'DNS OK' . PHP_EOL;
-    exit(0);
-}
-" || MYSQL_HOST="${MYSQLHOST:-mysql.railway.internal}"
+# If DNS failed (returns the hostname unchanged), use TCP proxy
+if [ "$DNS_RESULT" = "mysql.railway.internal" ] || [ -z "$DNS_RESULT" ]; then
+    echo "Private DNS failed — checking for TCP proxy vars"
+    # Use MYSQLHOST which Railway auto-sets from the MySQL service
+    MYSQL_HOST="${MYSQLHOST:-mysql.railway.internal}"
+    MYSQL_PORT="${MYSQLPORT:-3306}"
+else
+    echo "Private DNS OK"
+    MYSQL_HOST="mysql.railway.internal"
+    MYSQL_PORT="3306"
+fi
 
-echo "Using DB_HOST: $MYSQL_HOST"
+echo "Using MYSQL_HOST=$MYSQL_HOST PORT=$MYSQL_PORT"
 
 cat > .env << ENVEOF
 APP_NAME=EzzeSend
@@ -32,8 +30,8 @@ LOG_CHANNEL=stack
 LOG_LEVEL=debug
 
 DB_CONNECTION=mysql
-DB_HOST=${MYSQL_HOST}
-DB_PORT=${MYSQL_PORT}
+DB_HOST=$MYSQL_HOST
+DB_PORT=$MYSQL_PORT
 DB_DATABASE=railway
 DB_USERNAME=root
 DB_PASSWORD=dRHjLZTHTJBuvgyhRfFLYaFiOjYAttzy
@@ -50,21 +48,22 @@ PUSHER_APP_SECRET=
 PUSHER_APP_CLUSTER=mt1
 ENVEOF
 
-echo "DB_HOST in .env: $(grep ^DB_HOST .env)"
+echo "Written .env with DB_HOST=$MYSQL_HOST"
 
-# Wait for MySQL
-echo "Waiting for MySQL to be ready..."
-for i in $(seq 1 30); do
-    php -r "
-    \$pdo = new PDO(
-        'mysql:host=${MYSQL_HOST};port=${MYSQL_PORT};dbname=railway',
-        'root',
-        'dRHjLZTHTJBuvgyhRfFLYaFiOjYAttzy',
-        [PDO::ATTR_TIMEOUT => 3]
-    );
-    echo 'MySQL connected OK' . PHP_EOL;
-    " 2>/dev/null && { echo "MySQL ready!"; break; }
-    echo "Attempt $i - waiting..."
+# Wait for MySQL with timeout
+echo "Waiting for MySQL..."
+for i in $(seq 1 20); do
+    result=$(php -r "
+    try {
+        new PDO('mysql:host=$MYSQL_HOST;port=$MYSQL_PORT;dbname=railway;connect_timeout=3', 'root', 'dRHjLZTHTJBuvgyhRfFLYaFiOjYAttzy');
+        echo 'OK';
+    } catch(Exception \$e) { echo 'FAIL:'.\$e->getMessage(); }
+    " 2>/dev/null)
+    echo "Attempt $i: $result"
+    if [ "$result" = "OK" ]; then
+        echo "MySQL connected!"
+        break
+    fi
     sleep 2
 done
 
