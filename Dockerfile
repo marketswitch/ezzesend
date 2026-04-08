@@ -67,3 +67,4 @@ RUN chmod -R 775 storage bootstrap/cache \
 EXPOSE 8000
 
 CMD ["bash", "start.sh"]
+# Railway cache bust Wed Apr  8 04:23:16 UTC 2026
