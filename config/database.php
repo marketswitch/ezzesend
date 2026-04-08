@@ -1,54 +1,39 @@
 <?php
 
-use Illuminate\Support\Str;
-
 return [
 
-    'default' => env('DB_CONNECTION', 'mysql'),
+    'default' => 'mysql',
 
     'connections' => [
 
+        'mysql' => [
+            'driver'         => 'mysql',
+            'host'           => env('MYSQL_HOST', env('DB_HOST', 'mysql.railway.internal')),
+            'port'           => env('MYSQL_PORT', env('DB_PORT', '3306')),
+            'database'       => env('MYSQL_DATABASE', env('DB_DATABASE', 'railway')),
+            'username'       => env('MYSQL_USER', env('DB_USERNAME', 'root')),
+            'password'       => env('MYSQL_PASSWORD', env('DB_PASSWORD', 'dRHjLZTHTJBuvgyhRfFLYaFiOjYAttzy')),
+            'unix_socket'    => '',
+            'charset'        => 'utf8mb4',
+            'collation'      => 'utf8mb4_unicode_ci',
+            'prefix'         => '',
+            'prefix_indexes' => true,
+            'strict'         => false,
+            'engine'         => null,
+        ],
+
         'sqlite' => [
             'driver'   => 'sqlite',
-            'database' => database_path('database.sqlite'),
-            'prefix'   => '',
-        ],
-
-        'mysql' => [
-            'driver'      => 'mysql',
-            'url'         => env('DATABASE_URL'),
-            'host'        => env('DB_HOST', '127.0.0.1'),
-            'port'        => env('DB_PORT', '3306'),
-            'database'    => env('DB_DATABASE', 'railway'),
-            'username'    => env('DB_USERNAME', 'root'),
-            'password'    => env('DB_PASSWORD', ''),
-            'unix_socket' => env('DB_SOCKET', ''),
-            'charset'     => 'utf8mb4',
-            'collation'   => 'utf8mb4_unicode_ci',
-            'prefix'      => '',
-            'prefix_indexes' => true,
-            'strict'      => true,
-            'engine'      => null,
-            'options'     => extension_loaded('pdo_mysql') ? array_filter([
-                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
-            ]) : [],
+            'database' => ':memory:',
         ],
 
     ],
 
-    'migrations' => [
-        'table'               => 'migrations',
-        'update_date_on_publish' => true,
-    ],
+    'migrations' => ['table' => 'migrations', 'update_date_on_publish' => true],
 
     'redis' => [
         'client'  => 'phpredis',
-        'default' => [
-            'host'     => env('REDIS_HOST', '127.0.0.1'),
-            'password' => env('REDIS_PASSWORD', null),
-            'port'     => env('REDIS_PORT', 6379),
-            'database' => 0,
-        ],
+        'default' => ['host' => '127.0.0.1', 'password' => null, 'port' => 6379, 'database' => 0],
     ],
 
 ];

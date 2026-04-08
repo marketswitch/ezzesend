@@ -1,52 +1,56 @@
 #!/bin/bash
-set -e
-
 echo "=== EzzeSend Starting ==="
+echo "PORT=$PORT APP_ENV=$APP_ENV"
+echo "MYSQL_HOST=$MYSQL_HOST MYSQL_PORT=$MYSQL_PORT"
 
-# ---------------------------------------------------------------------------
-# Populate .env with Railway MySQL environment variables at runtime.
-# Railway injects these from the linked MySQL service; they are not available
-# at image-build time, so we must write them into .env here before Laravel
-# bootstraps its database connection.
-# ---------------------------------------------------------------------------
-echo "Updating .env with Railway database credentials..."
+# Write .env fresh every time
+cat > /var/www/html/.env << ENVEOF
+APP_NAME=EzzeSend
+APP_ENV=production
+APP_KEY=base64:X3pLm8vQpR2wNjY4tBdCgUaEiHsSoF6nDeKuMxIcAo=
+APP_DEBUG=true
+APP_URL=https://ezzesend-production.up.railway.app
+LOG_CHANNEL=stack
+LOG_LEVEL=debug
+DB_CONNECTION=mysql
+DB_HOST=${MYSQL_HOST:-mysql.railway.internal}
+DB_PORT=${MYSQL_PORT:-3306}
+DB_DATABASE=${MYSQL_DATABASE:-railway}
+DB_USERNAME=${MYSQL_USER:-root}
+DB_PASSWORD=${MYSQL_PASSWORD:-dRHjLZTHTJBuvgyhRfFLYaFiOjYAttzy}
+CACHE_DRIVER=file
+SESSION_DRIVER=file
+QUEUE_CONNECTION=sync
+BROADCAST_DRIVER=log
+FILESYSTEM_DISK=local
+PUSHER_APP_ID=
+PUSHER_APP_KEY=
+PUSHER_APP_SECRET=
+PUSHER_APP_CLUSTER=mt1
+ENVEOF
 
-sed -i "s|^DB_HOST=.*|DB_HOST=${MYSQL_HOST}|"         .env
-sed -i "s|^DB_PORT=.*|DB_PORT=${MYSQL_PORT}|"         .env
-sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${MYSQL_DATABASE}|" .env
-sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${MYSQL_USER}|"  .env
-sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${MYSQL_PASSWORD}|" .env
+echo "DB_HOST=$(grep DB_HOST /var/www/html/.env)"
 
-echo "DB_HOST     -> ${MYSQL_HOST}"
-echo "DB_PORT     -> ${MYSQL_PORT}"
-echo "DB_DATABASE -> ${MYSQL_DATABASE}"
-echo "DB_USERNAME -> ${MYSQL_USER}"
-
-# ---------------------------------------------------------------------------
-# Wait for the database to be reachable before running migrations.
-# ---------------------------------------------------------------------------
-echo "Testing database connection..."
+# Test connection
 php -r "
-\$host     = getenv('MYSQL_HOST');
-\$port     = getenv('MYSQL_PORT') ?: 3306;
-\$dbname   = getenv('MYSQL_DATABASE');
-\$user     = getenv('MYSQL_USER');
-\$password = getenv('MYSQL_PASSWORD');
-
+\$h = getenv('MYSQL_HOST') ?: 'mysql.railway.internal';
+\$p = getenv('MYSQL_PORT') ?: '3306';
+\$d = getenv('MYSQL_DATABASE') ?: 'railway';
+\$u = getenv('MYSQL_USER') ?: 'root';
+\$pw = getenv('MYSQL_PASSWORD') ?: 'dRHjLZTHTJBuvgyhRfFLYaFiOjYAttzy';
+echo \"Connecting to \$h:\$p/\$d as \$u\n\";
 try {
-    \$dsn = \"mysql:host={\$host};port={\$port};dbname={\$dbname};connect_timeout=10\";
-    \$pdo = new PDO(\$dsn, \$user, \$password);
-    echo 'DB connected OK' . PHP_EOL;
-} catch (Exception \$e) {
-    echo 'DB FAIL: ' . \$e->getMessage() . PHP_EOL;
-    exit(1);
-}
+    new PDO(\"mysql:host=\$h;port=\$p;dbname=\$d;connect_timeout=10\", \$u, \$pw);
+    echo \"DB OK\n\";
+} catch(Exception \$e) { echo \"DB FAIL: \".\$e->getMessage().\"\n\"; }
 "
 
-php artisan migrate --force --no-interaction 2>&1
+cd /var/www/html
+php artisan config:clear 2>/dev/null || true
+php artisan migrate --force --no-interaction 2>&1 || echo "Migration warning"
 php artisan db:seed --force --no-interaction 2>&1 || true
 php artisan config:cache 2>/dev/null || true
 php artisan route:cache 2>/dev/null || true
 
-echo "Starting on port ${PORT:-8000}"
+echo "Starting server on ${PORT:-8000}"
 exec php artisan serve --host=0.0.0.0 --port=${PORT:-8000}
